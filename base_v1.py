@@ -11,7 +11,8 @@ class PINN_Base:
                  lower_bound: List[float],
                  upper_bound: List[float],
                  layers: List[int],
-                 dtype=tf.float32):
+                 dtype=tf.float32,
+                 use_differential_points=True):
 
         self.lower_bound = np.array(lower_bound)
         self.upper_bound = np.array(upper_bound)
@@ -19,6 +20,7 @@ class PINN_Base:
         self.layers = layers
 
         self.dtype = dtype
+        self.use_differential_points = use_differential_points
 
         self.graph = tf.Graph()
         self._build_graph()
@@ -31,7 +33,11 @@ class PINN_Base:
             self._init_params()
 
             self.U_hat = self._forward(self.X)
-            self.U_hat_df = self._forward(self.X_df)
+
+            if self.use_differential_points:
+                self.U_hat_df = self._forward(self.X_df)
+            else:
+                self.U_hat_df = None
 
             self.loss = self._loss(self.U_hat, self.U_hat_df)
 
@@ -76,9 +82,14 @@ class PINN_Base:
 
         loss_collocation = tf.reduce_mean(
             tf.square(self._residual_collocation(U_hat)))
-        loss_differential = tf.reduce_mean(
-            tf.square(self._residual_differential(U_hat_df)))
-        return mse + loss_collocation + loss_differential
+
+        if self.use_differential_points:
+            loss_differential = tf.reduce_mean(
+                tf.square(self._residual_differential(U_hat_df)))
+
+            return mse + loss_collocation + loss_differential
+        else:
+            return mse + loss_collocation
 
     def _residual(self, u, x, u_true=None):
 
@@ -130,15 +141,26 @@ class PINN_Base:
         del self.graph
         self.sess.close()
 
-    def train_BFGS(self, X, U, X_df):
-        self.optimizer_BFGS.minimize(
-            self.sess, {self.X: X, self.U: U, self.X_df: X_df})
+    def train_BFGS(self, X, U, X_df=None):
 
-    def train_Adam(self, X, U, X_df, n_iter=2000):
+        if self.use_differential_points:
+            feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
+        else:
+            feed_dict = {self.X: X, self.U: U}
+
+        self.optimizer_BFGS.minimize(
+            self.sess, feed_dict)
+
+    def train_Adam(self, X, U, X_df=None, n_iter=2000):
+
+        if self.use_differential_points:
+            feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
+        else:
+            feed_dict = {self.X: X, self.U: U}
+
         progbar = Progbar(n_iter)
         for i in range(n_iter):
-            self.sess.run(self.optimizer_Adam, {
-                          self.X: X, self.U: U, self.X_df: X_df})
+            self.sess.run(self.optimizer_Adam, feed_dict)
             progbar.update(i+1)
 
     def predict(self, X):
