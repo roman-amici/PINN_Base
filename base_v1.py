@@ -52,7 +52,9 @@ class PINN_Base:
     def _init_placeholders(self):
 
         self.X = tf.placeholder(self.dtype, shape=[None, self.layers[0]])
-        self.X_df = tf.placeholder(self.dtype, shape=[None, self.layers[0]])
+        if self.use_differential_points:
+            self.X_df = tf.placeholder(
+                self.dtype, shape=[None, self.layers[0]])
         self.U = tf.placeholder(self.dtype, shape=[None, self.layers[-1]])
 
     def _init_params(self):
