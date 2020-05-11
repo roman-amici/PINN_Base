@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.opt import ScipyOptimizerInterface
 from tensorflow.keras.utils import Progbar
+import PINN_Base.util as util
 
 from typing import List
 
@@ -143,15 +144,19 @@ class PINN_Base:
         del self.graph
         self.sess.close()
 
-    def train_BFGS(self, X, U, X_df=None):
+    def train_BFGS(self, X, U, X_df=None, print_loss=False):
 
         if self.use_differential_points:
             feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
         else:
             feed_dict = {self.X: X, self.U: U}
 
-        self.optimizer_BFGS.minimize(
-            self.sess, feed_dict)
+        if print_loss:
+            self.optimizer_BFGS.minimize(
+                self.sess, feed_dict, fetches=[self.loss], loss_callback=util.bfgs_callback)
+        else:
+            self.optimizer_BFGS.minimize(
+                self.sess, feed_dict)
 
     def train_Adam(self, X, U, X_df=None, n_iter=2000):
 

@@ -1,5 +1,6 @@
 from scipy.io import loadmat
 import numpy as np
+import sys
 
 
 def percent_noise(U, noise_percent):
@@ -68,3 +69,7 @@ def to_grid_u_2d(nx1, nx2, U):
             u[i, j] = U[idx, 0]
 
     return u
+
+
+def bfgs_callback(loss):
+    print(f"loss={loss}", end="\r")
