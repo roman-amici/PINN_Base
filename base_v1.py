@@ -33,7 +33,7 @@ class PINN_Base:
             self._init_placeholders()
             self._init_params()
 
-            self.U_hat = self._forward(self.X)
+            self.U_hat, self.activations = self._forward(self.X, True)
 
             if self.use_differential_points:
                 self.U_hat_df = self._forward(self.X_df)
@@ -62,9 +62,9 @@ class PINN_Base:
 
         self.weights, self.biases = self._init_NN(self.layers)
 
-    def _forward(self, X):
+    def _forward(self, X, return_activations=False):
 
-        return self._NN(X, self.weights, self.biases)
+        return self._NN(X, self.weights, self.biases, return_activations)
 
     def _init_optimizers(self):
         self.optimizer_BFGS = ScipyOptimizerInterface(
@@ -81,18 +81,17 @@ class PINN_Base:
 
     def _loss(self, U_hat, U_hat_df):
 
-        mse = tf.reduce_mean(tf.square(self.U - U_hat))
-
-        loss_collocation = tf.reduce_mean(
+        self.mse = tf.reduce_mean(tf.square(self.U - U_hat))
+        self.loss_residual = tf.reduce_mean(
             tf.square(self._residual_collocation(U_hat)))
 
         if self.use_differential_points:
-            loss_differential = tf.reduce_mean(
+            loss_residual_differential = tf.reduce_mean(
                 tf.square(self._residual_differential(U_hat_df)))
 
-            return mse + loss_collocation + loss_differential
+            return self.mse + self.loss_residual + loss_residual_differential
         else:
-            return mse + loss_collocation
+            return self.mse + self.loss_residual
 
     def _residual(self, u, x, u_true=None):
 
@@ -105,21 +104,28 @@ class PINN_Base:
     def _residual_differential(self, U_hat_df):
         return self._residual(U_hat_df, self.X_df)
 
-    def _NN(self, X, weights, biases):
+    def _NN(self, X, weights, biases, return_activations=False):
+
+        activations = []
 
         H = 2.0 * (X - self.lower_bound) / \
             (self.upper_bound - self.lower_bound) - 1.0
+        activations.append(H)
 
         for l in range(len(weights)-1):
             W = weights[l]
             b = biases[l]
             H = tf.tanh(tf.add(tf.matmul(H, W), b))
+            activations.append(H)
 
         W = weights[-1]
         b = biases[-1]
         Y = tf.add(tf.matmul(H, W), b)
 
-        return Y
+        if return_activations:
+            return Y, activations
+        else:
+            return Y
 
     def _xavier_init(self, size):
         in_dim = size[0]
@@ -143,6 +149,24 @@ class PINN_Base:
     def cleanup(self):
         del self.graph
         self.sess.close()
+
+    def get_weights(self):
+        return self.sess.run([self.weights, self.biases])
+
+    def get_loss(self, X):
+        return self.sess.run(self.loss, {self.X: X})
+
+    def get_loss_collocation(self, X):
+        return self.sess.run(self.loss)
+
+    def get_loss_residual(self, X):
+        return self.sess.run(self.loss_residual)
+
+    def get_activations(self, X, layer=None):
+        if layer:
+            return self.sess.run(self.activations[layer], {self.X: X})
+        else:
+            return self.sess.run(self.activations, {self.X: X})
 
     def train_BFGS(self, X, U, X_df=None, print_loss=False):
 
