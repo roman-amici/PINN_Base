@@ -33,7 +33,7 @@ class PINN_Base:
             self._init_placeholders()
             self._init_params()
 
-            self.U_hat, self.activations = self._forward(self.X, True)
+            self.U_hat = self._forward(self.X)
 
             if self.use_differential_points:
                 self.U_hat_df = self._forward(self.X_df)
@@ -62,9 +62,15 @@ class PINN_Base:
 
         self.weights, self.biases = self._init_NN(self.layers)
 
-    def _forward(self, X, return_activations=False):
+    def _forward(self, X):
 
-        return self._NN(X, self.weights, self.biases, return_activations)
+        U, activations = self._NN(X, self.weights, self.biases)
+
+        # By convention we only store generic values for a single forward-path
+        if X == self.X:
+            self.activations = activations
+
+        return U
 
     def _init_optimizers(self):
         self.optimizer_BFGS = ScipyOptimizerInterface(
@@ -104,7 +110,7 @@ class PINN_Base:
     def _residual_differential(self, U_hat_df):
         return self._residual(U_hat_df, self.X_df)
 
-    def _NN(self, X, weights, biases, return_activations=False):
+    def _NN(self, X, weights, biases):
 
         activations = []
 
@@ -122,10 +128,7 @@ class PINN_Base:
         b = biases[-1]
         Y = tf.add(tf.matmul(H, W), b)
 
-        if return_activations:
-            return Y, activations
-        else:
-            return Y
+        return Y, activations
 
     def _xavier_init(self, size):
         in_dim = size[0]
