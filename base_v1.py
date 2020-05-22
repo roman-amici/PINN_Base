@@ -52,11 +52,12 @@ class PINN_Base:
 
     def _init_placeholders(self):
 
-        self.X = tf.placeholder(self.dtype, shape=[None, self.layers[0]])
+        self.X = tf.placeholder(self.dtype, shape=[None, self.get_input_dim()])
         if self.use_differential_points:
             self.X_df = tf.placeholder(
-                self.dtype, shape=[None, self.layers[0]])
-        self.U = tf.placeholder(self.dtype, shape=[None, self.layers[-1]])
+                self.dtype, shape=[None, self.get_input_dim()])
+        self.U = tf.placeholder(
+            self.dtype, shape=[None, self.get_output_dim()])
 
     def _init_params(self):
 
@@ -148,6 +149,12 @@ class PINN_Base:
             biases.append(b)
 
         return weights, biases
+
+    def get_input_dim(self):
+        return self.layers[0]
+
+    def get_output_dim(self):
+        return self.layers[-1]
 
     def cleanup(self):
         del self.graph
