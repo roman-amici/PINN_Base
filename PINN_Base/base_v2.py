@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from tensorflow.keras.util import Progbar
+from tensorflow.keras.utils import Progbar
 from tensorflow.keras.layers import Layer, Dense
 from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.optimizers import Adam
@@ -62,11 +62,12 @@ class PINN_Base:
             # derivatives from them in the residual.
             g.watch(X)
             if self.use_differential_points:
-                g.watch_X_df
+                g.watch(X_df)
 
             U_hat = self._forward(X)
-            mse = self.mse(U_hat, U)
-            loss_residual = self._residual_collocation(X, U_hat, g)
+            mse = self.mse(U, U_hat)
+            loss_residual = self.mse(
+                0, self._residual_collocation(X, U_hat, g, U))
 
             if self.use_differential_points:
                 U_df = self._forward(X_df)
@@ -87,31 +88,31 @@ class PINN_Base:
         # Fill this in with your differential equation
         return tf.constant(0.0)
 
-    def _residual_collocation(self, X, U_hat, gradient_tape):
-        return self._residual(U_hat, X, gradient_tape)
+    def _residual_collocation(self, X, U_hat, gradient_tape, U_true):
+        return self._residual(U_hat, X, gradient_tape, U_true)
 
     def _residual_differential(self, X, U_hat, gradient_tape):
         return self._residual(U_hat, X, gradient_tape)
 
     def _training_loop_optimizer(self, X, U, X_df, epochs, optimizer):
-        X = tf.convert_to_tensor(X)
-        U = tf.convert_to_tensor(U)
+        X = tf.convert_to_tensor(X, dtype=tf.float32)
+        U = tf.convert_to_tensor(U, dtype=tf.float32)
 
         if self.use_differential_points:
-            X_df = tf.convert_to_tensor(X_df)
+            X_df = tf.convert_to_tensor(X_df, dtype=tf.float32)
         else:
             X_df = None
 
         progbar = Progbar(epochs)
-        params = self.get_trainable_parameters()
         for i in range(epochs):
             with tf.GradientTape() as param_tape:
                 loss, _ = self._loss(X, U, X_df)
+            params = self.get_trainable_parameters()
             grads = param_tape.gradient(
                 loss, params)
             optimizer.apply_gradients(zip(grads, params))
 
-            progbar.update(i+1, ("loss", loss))
+            progbar.update(i+1, [("loss", loss)])
 
     def get_trainable_parameters(self):
         return self.NN.trainable_weights
