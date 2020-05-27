@@ -18,7 +18,7 @@ class FeedForward(Layer):
             Dense(layers[i], activation=activation)
             for i in range(1, len(layers)-1)]
 
-        layers.append(Dense(layers[-1], activation="linear"))
+        self.layers.append(Dense(layers[-1], activation="linear"))
 
         super().__init__(**kwargs)
 
