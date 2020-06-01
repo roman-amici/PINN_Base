@@ -117,6 +117,17 @@ class PINN_Base:
     def get_trainable_parameters(self):
         return self.NN.trainable_weights
 
+    def get_trainable_parameters_layered(self):
+        weights = self.NN.trainable_weights
+        weights, biases = [], []
+        for i, w in weights:
+            if i % 2 == 0:
+                weights.append(w)
+            else:
+                biases.append(w)
+
+        return weights, biases
+
     def train_Adam(self, X, U, X_df, epochs, **kwargs):
         adam = Adam(**kwargs)
         self._training_loop_optimizer(X, U, X_df, epochs, adam)

@@ -13,7 +13,8 @@ class PINN_Base:
                  upper_bound: List[float],
                  layers: List[int],
                  dtype=tf.float32,
-                 use_differential_points=True):
+                 use_differential_points=True,
+                 combine_differential_points=False):
 
         self.lower_bound = np.array(lower_bound)
         self.upper_bound = np.array(upper_bound)
@@ -177,6 +178,28 @@ class PINN_Base:
             return self.sess.run(self.activations[layer], {self.X: X})
         else:
             return self.sess.run(self.activations, {self.X: X})
+
+    def _size_of_variable_list(self, variable_list):
+        return np.sum([
+            tf.make_ndarray(v.size) for v in variable_list
+        ])
+
+    def _count_params(self):
+        params_weights = self._size_of_variable_list(self.weights)
+        params_biases = self._size_of_variable_list(self.biases)
+
+        return params_weights + params_biases
+
+    def get_architecture_description(self):
+        params = self._count_params()
+        return {
+            "arch_name": "base",
+            "n_params": params,
+            "shape": self.layers[:]
+        }
+
+    def get_version(self):
+        return tf.__version__
 
     def train_BFGS(self, X, U, X_df=None, print_loss=False):
 
