@@ -45,11 +45,11 @@ class PINN_Base:
 
             self._init_optimizers()
 
-            init = tf.global_variables_initializer()
+            self.init = tf.global_variables_initializer()
             self.graph.finalize()
 
         self.sess = tf.Session(graph=self.graph)
-        self.sess.run(init)
+        self.sess.run(self.init)
 
     def _init_placeholders(self):
 
@@ -157,6 +157,11 @@ class PINN_Base:
     def get_output_dim(self):
         return self.layers[-1]
 
+    def reset_session(self):
+        self.sess.close()
+        self.sess = tf.Session(graph=self.graph)
+        self.sess.run(self.init)
+
     def cleanup(self):
         del self.graph
         self.sess.close()
@@ -180,8 +185,9 @@ class PINN_Base:
             return self.sess.run(self.activations, {self.X: X})
 
     def _size_of_variable_list(self, variable_list):
+        l = self.sess.run(variable_list)
         return np.sum([
-            tf.make_ndarray(v.size) for v in variable_list
+            v.size for v in l
         ])
 
     def _count_params(self):
@@ -195,7 +201,8 @@ class PINN_Base:
         return {
             "arch_name": "base",
             "n_params": params,
-            "shape": self.layers[:]
+            "shape": self.layers[:],
+            "dtype": "float32" if self.dtype == tf.float32 else "float64"
         }
 
     def get_version(self):
