@@ -15,7 +15,8 @@ class PINN_Base:
                  dtype=tf.float32,
                  use_differential_points=True,
                  combine_differential_points=False,
-                 adam_learning_rate=0.0001):
+                 adam_learning_rate=0.0001,
+                 session_config=None):
 
         self.lower_bound = np.array(lower_bound)
         self.upper_bound = np.array(upper_bound)
@@ -25,6 +26,7 @@ class PINN_Base:
         self.dtype = dtype
         self.use_differential_points = use_differential_points
         self.adam_learning_rate = adam_learning_rate
+        self.session_config = session_config
 
         self.graph = tf.Graph()
         self._build_graph()
@@ -53,6 +55,13 @@ class PINN_Base:
         self.sess = tf.Session(graph=self.graph)
         self.sess.run(self.init)
 
+    def _init_session(self):
+
+        if self.session_config is not None:
+            self.sess = tf.Session(
+                graph=self.graph, config=self.session_config)
+            self.sess.run(self.init)
+
     def _init_placeholders(self):
 
         self.X = tf.placeholder(self.dtype, shape=[None, self.get_input_dim()])
@@ -65,6 +74,16 @@ class PINN_Base:
     def _init_params(self):
 
         self.weights, self.biases = self._init_NN(self.layers)
+
+    def _init_session(self):
+
+        if self.session_config is not None:
+            self.sess = tf.Session(
+                graph=self.graph, config=self.session_config)
+
+        else:
+            self.sess = tf.Session(graph=self.graph)
+        self.sess.run(self.init)
 
     def _forward(self, X):
 
@@ -162,8 +181,7 @@ class PINN_Base:
 
     def reset_session(self):
         self.sess.close()
-        self.sess = tf.Session(graph=self.graph)
-        self.sess.run(self.init)
+        self._init_session()
 
     def cleanup(self):
         del self.graph
