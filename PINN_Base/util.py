@@ -3,6 +3,18 @@ import numpy as np
 import sys
 
 
+def bounds_from_data(X):
+    lower_bound = np.min(X, axis=0)
+    upper_bound = np.max(X, axis=0)
+
+    return lower_bound, upper_bound
+
+
+def random_choice(X, size=10000):
+    idx = np.random.choice(list(range(X.shape[0])), size=size)
+    return X[idx, :]
+
+
 def percent_noise(U, noise_percent):
     std = np.std(U[:, 0])*noise_percent
     return U + np.random.normal(0, std, size=U.shape)

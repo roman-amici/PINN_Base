@@ -11,8 +11,8 @@ class FeedForward(Layer):
 
     def __init__(self, lower_bound, upper_bound, layers, activation="tanh", **kwargs):
 
-        self.lower_bound = tf.convert_to_tensor(lower_bound)
-        self.upper_bound = tf.convert_to_tensor(upper_bound)
+        self.lower_bound = tf.convert_to_tensor(lower_bound, dtype=tf.float32)
+        self.upper_bound = tf.convert_to_tensor(upper_bound, dtype=tf.float32)
 
         self.layers = [
             Dense(layers[i], activation=activation)
@@ -103,7 +103,7 @@ class PINN_Base:
         else:
             X_df = None
 
-        progbar = Progbar(epochs)
+        progbar = Progbar(epochs, stateful_metrics=["loss"])
         for i in range(epochs):
             with tf.GradientTape() as param_tape:
                 loss, _ = self._loss(X, U, X_df)

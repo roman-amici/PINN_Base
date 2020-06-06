@@ -14,7 +14,8 @@ class PINN_Base:
                  layers: List[int],
                  dtype=tf.float32,
                  use_differential_points=True,
-                 combine_differential_points=False):
+                 combine_differential_points=False,
+                 adam_learning_rate=0.0001):
 
         self.lower_bound = np.array(lower_bound)
         self.upper_bound = np.array(upper_bound)
@@ -23,6 +24,7 @@ class PINN_Base:
 
         self.dtype = dtype
         self.use_differential_points = use_differential_points
+        self.adam_learning_rate = adam_learning_rate
 
         self.graph = tf.Graph()
         self._build_graph()
@@ -85,7 +87,8 @@ class PINN_Base:
                      'gtol': 1.0 * np.finfo(float).eps,
                      'ftol': 1.0 * np.finfo(float).eps})
 
-        self.optimizer_Adam = tf.train.AdamOptimizer().minimize(self.loss)
+        self.optimizer_Adam = tf.train.AdamOptimizer(
+            self.adam_learning_rate).minimize(self.loss)
 
     def _loss(self, U_hat, U_hat_df):
 
@@ -137,7 +140,7 @@ class PINN_Base:
         out_dim = size[1]
         stddev = np.sqrt(2 / (in_dim + out_dim))
 
-        return tf.Variable(tf.truncated_normal([in_dim, out_dim], stddev=stddev), dtype=self.dtype)
+        return tf.Variable(tf.truncated_normal([in_dim, out_dim], stddev=stddev, dtype=self.dtype), dtype=self.dtype)
 
     def _init_NN(self, layers):
         weights = []
@@ -231,8 +234,10 @@ class PINN_Base:
 
         progbar = Progbar(n_iter)
         for i in range(n_iter):
-            self.sess.run(self.optimizer_Adam, feed_dict)
-            progbar.update(i+1)
+            _, loss = self.sess.run(
+                [self.optimizer_Adam, self.loss], feed_dict)
+
+            progbar.update(i+1, [("loss", loss)])
 
     def predict(self, X):
         return self.sess.run(self.U_hat, {self.X: X})
