@@ -3,6 +3,7 @@ import numpy as np
 from tensorflow.contrib.opt import ScipyOptimizerInterface
 from tensorflow.keras.utils import Progbar
 import PINN_Base.util as util
+from sklearn.utils import shuffle
 
 from typing import List
 
@@ -14,7 +15,7 @@ class PINN_Base:
                  layers: List[int],
                  dtype=tf.float32,
                  use_differential_points=True,
-                 combine_differential_points=False,
+                 use_collocation_residual=True,
                  adam_learning_rate=0.0001,
                  session_config=None):
 
@@ -25,6 +26,10 @@ class PINN_Base:
 
         self.dtype = dtype
         self.use_differential_points = use_differential_points
+        # When using differential points, this decides whether you want to
+        # evaluate the residual on the collocation points as well as the differential points.
+        # If true, you will have a three term loss instead of a 2 term loss.
+        self.use_collocation_residual = use_collocation_residual
         self.adam_learning_rate = adam_learning_rate
         self.session_config = session_config
 
@@ -119,7 +124,10 @@ class PINN_Base:
             loss_residual_differential = tf.reduce_mean(
                 tf.square(self._residual_differential(U_hat_df)))
 
-            return self.mse + self.loss_residual + loss_residual_differential
+            if self.use_collocation_residual:
+                return self.mse + self.loss_residual + loss_residual_differential
+            else:
+                return self.mse + loss_residual_differential
         else:
             return self.mse + self.loss_residual
 
@@ -256,6 +264,31 @@ class PINN_Base:
                 [self.optimizer_Adam, self.loss], feed_dict)
 
             progbar.update(i+1, [("loss", loss)])
+
+    def train_Adam_batched(self, X, U, batch_size=128, epochs=10):
+        # Currently batched is only supported when use_differential_points is False
+        # Until I look more into how batches might be balanced between the two sets of points
+
+        # Note, I was going to build this with the tf.dataset api but it
+        # doesn't work well outside of eager mode so for 1.0 we'll just write batching code manually.
+
+        for epoch in range(epochs):
+            print(f"Epoch {epoch+1}/{epochs}")
+
+            X_s, U_s = shuffle(X, U)
+
+            progbar = Progbar(X.shape[0])
+            for b in range(0, X.shape[0], batch_size):
+
+                X_b = X_s[b:(b+batch_size), :]
+                U_b = U_s[b:(b+batch_size), :]
+
+                _, loss = self.sess.run(
+                    [self.optimizer_Adam, self.loss], {
+                        self.X: X_b, self.U: U_b}
+                )
+
+                progbar.update(b+batch_size, [("loss", loss)])
 
     def predict(self, X):
         return self.sess.run(self.U_hat, {self.X: X})
