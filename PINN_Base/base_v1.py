@@ -16,7 +16,7 @@ class PINN_Base:
                  dtype=tf.float32,
                  use_differential_points=True,
                  use_collocation_residual=True,
-                 adam_learning_rate=0.0001,
+                 optimizer_kwargs={},
                  session_config=None):
 
         self.lower_bound = np.array(lower_bound)
@@ -30,7 +30,7 @@ class PINN_Base:
         # evaluate the residual on the collocation points as well as the differential points.
         # If true, you will have a three term loss instead of a 2 term loss.
         self.use_collocation_residual = use_collocation_residual
-        self.adam_learning_rate = adam_learning_rate
+        self.optimizer_kwargs = optimizer_kwargs
         self.session_config = session_config
 
         self.graph = tf.Graph()
@@ -112,7 +112,7 @@ class PINN_Base:
                      'ftol': 1.0 * np.finfo(float).eps})
 
         self.optimizer_Adam = tf.train.AdamOptimizer(
-            self.adam_learning_rate).minimize(self.loss)
+            **self.optimizer_kwargs).minimize(self.loss)
 
     def _loss(self, U_hat, U_hat_df):
 
@@ -265,30 +265,56 @@ class PINN_Base:
 
             progbar.update(i+1, [("loss", loss)])
 
-    def train_Adam_batched(self, X, U, batch_size=128, epochs=10):
-        # Currently batched is only supported when use_differential_points is False
-        # Until I look more into how batches might be balanced between the two sets of points
+    def train_Adam_batched(self, X, U, X_df=None, batch_size=128, epochs=10):
+        self._train_stochastic_optimizer(
+            self.optimizer_Adam, X, U, X_df, batch_size, epochs)
 
-        # Note, I was going to build this with the tf.dataset api but it
-        # doesn't work well outside of eager mode so for 1.0 we'll just write batching code manually.
+    def _train_stochastic_optimizer(self, optimizer_opp, X, U, X_df=None, batch_size=128, epochs=10):
 
+        if self.use_differential_points:
+            assert(X_df is not None)
+
+            assert(X_df.shape[0] >= X.shape[0])
+
+        progbar = Progbar(epochs, stateful_metrics=["loss_full"])
         for epoch in range(epochs):
-            print(f"Epoch {epoch+1}/{epochs}")
 
             X_s, U_s = shuffle(X, U)
 
-            progbar = Progbar(X.shape[0])
-            for b in range(0, X.shape[0], batch_size):
+            if X_df is not None:
+                X_df_s = shuffle(X_df)
+                dataset_size = X_df.shape[0]
+            else:
+                dataset_size = X.shape[0]
 
-                X_b = X_s[b:(b+batch_size), :]
-                U_b = U_s[b:(b+batch_size), :]
+            for b in range(0, dataset_size, batch_size):
+
+                if X_df is not None:
+                    # TODO: Shuffle X every subepoch instead of just starting over
+                    b_c = b % X_s.shape[0]
+                    X_b = X_s[b_c:(b_c+batch_size), :]
+                    U_b = U_s[b_c:(b_c+batch_size), :]
+                    X_df_b = X_df_s[b:(b+batch_size), :]
+                    feed_dict = {self.X: X_b, self.U: U_b, self.X_df: X_df_b}
+                else:
+                    X_b = X_s[b:(b+batch_size), :]
+                    U_b = U_s[b:(b+batch_size), :]
+                    feed_dict = {self.X: X_b, self.U: U_b}
 
                 _, loss = self.sess.run(
-                    [self.optimizer_Adam, self.loss], {
-                        self.X: X_b, self.U: U_b}
-                )
+                    [optimizer_opp, self.loss], feed_dict)
 
-                progbar.update(b+batch_size, [("loss", loss)])
+            if X_df is not None:
+                feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
+            else:
+                feed_dict = {self.X: X, self.U: U}
+
+            if epoch % 50 == 0:
+                # Do a fullbatch loss calculation to see if we're making progress
+                loss_full = self.sess.run(self.loss, feed_dict)
+                progbar.update(epoch+1, [("loss_full", loss_full)])
+            else:
+                progbar.update(epoch+1, [("loss", loss)])
 
     def predict(self, X):
         return self.sess.run(self.U_hat, {self.X: X})
