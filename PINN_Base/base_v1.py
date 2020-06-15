@@ -309,12 +309,7 @@ class PINN_Base:
             else:
                 feed_dict = {self.X: X, self.U: U}
 
-            if epoch % 50 == 0:
-                # Do a fullbatch loss calculation to see if we're making progress
-                loss_full = self.sess.run(self.loss, feed_dict)
-                progbar.update(epoch+1, [("loss_full", loss_full)])
-            else:
-                progbar.update(epoch+1, [("loss", loss)])
+            progbar.update(epoch+1, [("loss", loss)])
 
     def predict(self, X):
         return self.sess.run(self.U_hat, {self.X: X})
