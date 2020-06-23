@@ -17,7 +17,8 @@ class PINN_Base:
                  use_differential_points=True,
                  use_collocation_residual=True,
                  optimizer_kwargs={},
-                 session_config=None):
+                 session_config=None,
+                 df_multiplier=1.0):
 
         self.lower_bound = np.array(lower_bound)
         self.upper_bound = np.array(upper_bound)
@@ -32,6 +33,8 @@ class PINN_Base:
         self.use_collocation_residual = use_collocation_residual
         self.optimizer_kwargs = optimizer_kwargs
         self.session_config = session_config
+
+        self.df_multiplier = df_multiplier
 
         self.graph = tf.Graph()
         self._build_graph()
@@ -125,11 +128,11 @@ class PINN_Base:
                 tf.square(self._residual_differential(U_hat_df)))
 
             if self.use_collocation_residual:
-                return self.mse + self.loss_residual + loss_residual_differential
+                return self.mse + self.loss_residual + self.df_multiplier * loss_residual_differential
             else:
-                return self.mse + loss_residual_differential
+                return self.mse + self.df_multiplier * loss_residual_differential
         else:
-            return self.mse + self.loss_residual
+            return self.mse + self.df_multiplier * self.loss_residual
 
     def _residual(self, u, x, u_true=None):
 
@@ -290,8 +293,11 @@ class PINN_Base:
             for b in range(0, dataset_size, batch_size):
 
                 if X_df is not None:
-                    # TODO: Shuffle X every subepoch instead of just starting over
+                    b_c_last = b_c
                     b_c = b % X_s.shape[0]
+
+                    if b_c_last > b_c:
+                        X_s, U_s = shuffle(X, U)
                     X_b = X_s[b_c:(b_c+batch_size), :]
                     U_b = U_s[b_c:(b_c+batch_size), :]
                     X_df_b = X_df_s[b:(b+batch_size), :]
