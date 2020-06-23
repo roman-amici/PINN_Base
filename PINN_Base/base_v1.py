@@ -290,6 +290,7 @@ class PINN_Base:
             else:
                 dataset_size = X.shape[0]
 
+            b_c = 0
             for b in range(0, dataset_size, batch_size):
 
                 if X_df is not None:
