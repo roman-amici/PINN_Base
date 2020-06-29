@@ -15,8 +15,23 @@ def random_choice(X, size=10000):
     return X[idx, :]
 
 
+def random_choices(*args, size=10000):
+    span = args[0].shape[0]
+    idx = np.random.choice(list(range(span)), size=size)
+
+    vals = []
+    for X in args:
+        assert(X.shape[0] == span)
+        vals.append(X[idx, :])
+
+    if len(vals) == 1:
+        return vals[0]
+    else:
+        return vals
+
+
 def percent_noise(U, noise_percent):
-    std = np.std(U[:, 0])*noise_percent
+    std = np.std(U[:, 0]) * noise_percent
     return U + np.random.normal(0, std, size=U.shape)
 
 
@@ -38,7 +53,7 @@ def ungrid_u_2d(x1, x2, u):
 
     for i in range(x1.shape[0]):
         for j in range(x2.shape[0]):
-            idx = i*x2.shape[0] + j
+            idx = i * x2.shape[0] + j
             X[idx, 0] = x1[i]
             X[idx, 1] = x2[j]
             U[idx, 0] = u[i, j]
@@ -76,7 +91,7 @@ def to_grid_u_2d(nx1, nx2, U):
 
     for i in range(nx1):
         for j in range(nx2):
-            idx = i*nx2 + j
+            idx = i * nx2 + j
 
             u[i, j] = U[idx, 0]
 
@@ -85,3 +100,11 @@ def to_grid_u_2d(nx1, nx2, U):
 
 def bfgs_callback(loss):
     print(f"loss={loss}", end="\r")
+
+
+def rmse(U_true, U_hat):
+    return np.sqrt(np.mean((U_true[:, 0] - U_hat[:, 0])**2))
+
+
+def rel_error(U_true, U_hat):
+    return np.linalg.norm(U_true - U_hat, 2) / np.linalg.norm(U_true, 2)
