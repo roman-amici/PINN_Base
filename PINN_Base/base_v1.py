@@ -153,7 +153,7 @@ class PINN_Base:
             (self.upper_bound - self.lower_bound) - 1.0
         activations.append(H)
 
-        for l in range(len(weights)-1):
+        for l in range(len(weights) - 1):
             W = weights[l]
             b = biases[l]
             H = tf.tanh(tf.add(tf.matmul(H, W), b))
@@ -175,10 +175,10 @@ class PINN_Base:
     def _init_NN(self, layers):
         weights = []
         biases = []
-        for l in range(len(layers)-1):
-            W = self._xavier_init(size=[layers[l], layers[l+1]])
+        for l in range(len(layers) - 1):
+            W = self._xavier_init(size=[layers[l], layers[l + 1]])
             b = tf.Variable(
-                tf.zeros([1, layers[l+1]], dtype=self.dtype), dtype=self.dtype)
+                tf.zeros([1, layers[l + 1]], dtype=self.dtype), dtype=self.dtype)
             weights.append(W)
             biases.append(b)
 
@@ -197,6 +197,16 @@ class PINN_Base:
     def cleanup(self):
         del self.graph
         self.sess.close()
+
+    def get_all_weights(self):
+        # return all weight parameters as a list
+        # here to be changed by derived classes
+        return self.get_weights()
+
+    def get_all_weight_variables(self):
+        # Get a list (with the same shape as in get_all_weights)
+        # with the tf objects corresponding to all weights
+        return [self.weights, self.biases]
 
     def get_weights(self):
         return self.sess.run([self.weights, self.biases])
@@ -266,7 +276,7 @@ class PINN_Base:
             _, loss = self.sess.run(
                 [self.optimizer_Adam, self.loss], feed_dict)
 
-            progbar.update(i+1, [("loss", loss)])
+            progbar.update(i + 1, [("loss", loss)])
 
     def train_Adam_batched(self, X, U, X_df=None, batch_size=128, epochs=10):
         self._train_stochastic_optimizer(
@@ -299,13 +309,13 @@ class PINN_Base:
 
                     if b_c_last > b_c:
                         X_s, U_s = shuffle(X, U)
-                    X_b = X_s[b_c:(b_c+batch_size), :]
-                    U_b = U_s[b_c:(b_c+batch_size), :]
-                    X_df_b = X_df_s[b:(b+batch_size), :]
+                    X_b = X_s[b_c:(b_c + batch_size), :]
+                    U_b = U_s[b_c:(b_c + batch_size), :]
+                    X_df_b = X_df_s[b:(b + batch_size), :]
                     feed_dict = {self.X: X_b, self.U: U_b, self.X_df: X_df_b}
                 else:
-                    X_b = X_s[b:(b+batch_size), :]
-                    U_b = U_s[b:(b+batch_size), :]
+                    X_b = X_s[b:(b + batch_size), :]
+                    U_b = U_s[b:(b + batch_size), :]
                     feed_dict = {self.X: X_b, self.U: U_b}
 
                 _, loss = self.sess.run(
@@ -316,7 +326,7 @@ class PINN_Base:
             else:
                 feed_dict = {self.X: X, self.U: U}
 
-            progbar.update(epoch+1, [("loss", loss)])
+            progbar.update(epoch + 1, [("loss", loss)])
 
     def predict(self, X):
         return self.sess.run(self.U_hat, {self.X: X})
