@@ -250,7 +250,8 @@ class PINN_Base:
     def get_version(self):
         return tf.__version__
 
-    def train_BFGS(self, X, U, X_df=None, print_loss=False):
+    def train_BFGS(self, X, U, X_df=None, print_loss=True, custom_fetches=None):
+        # TODO: Support printing loss and doing custom fetching...
 
         if self.use_differential_points:
             feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
@@ -260,6 +261,13 @@ class PINN_Base:
         if print_loss:
             self.optimizer_BFGS.minimize(
                 self.sess, feed_dict, fetches=[self.loss], loss_callback=util.bfgs_callback)
+        elif custom_fetches is not None:
+            array, callback = util.make_fetches_callback()
+
+            self.optimizer_BFGS.minimize(
+                self.sess, feed_dict, fetches=custom_fetches, loss_callback=callback)
+
+            return array
         else:
             self.optimizer_BFGS.minimize(
                 self.sess, feed_dict)

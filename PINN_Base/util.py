@@ -98,6 +98,16 @@ def to_grid_u_2d(nx1, nx2, U):
     return u
 
 
+def make_fetches_callback():
+
+    array = []
+
+    def fetches_callback(*args):
+        array.append(args)
+
+    return array, fetches_callback
+
+
 def bfgs_callback(loss):
     print(f"loss={loss}", end="\r")
 
