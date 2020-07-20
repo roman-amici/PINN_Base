@@ -118,3 +118,12 @@ def rmse(U_true, U_hat):
 
 def rel_error(U_true, U_hat):
     return np.linalg.norm(U_true - U_hat, 2) / np.linalg.norm(U_true, 2)
+
+
+def unwrap(w0):
+    flats = []
+
+    for l in w0:
+        flats.append(l.flatten())
+
+    return np.hstack(flats)

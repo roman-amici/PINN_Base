@@ -1,4 +1,5 @@
 import tensorflow as tf
+import importlib
 import numpy as np
 from tensorflow.contrib.opt import ScipyOptimizerInterface
 from tensorflow.keras.utils import Progbar
@@ -18,7 +19,8 @@ class PINN_Base:
                  use_collocation_residual=True,
                  optimizer_kwargs={},
                  session_config=None,
-                 df_multiplier=1.0):
+                 df_multiplier=1.0,
+                 add_grad_ops=False):
 
         self.lower_bound = np.array(lower_bound)
         self.upper_bound = np.array(upper_bound)
@@ -33,6 +35,7 @@ class PINN_Base:
         self.use_collocation_residual = use_collocation_residual
         self.optimizer_kwargs = optimizer_kwargs
         self.session_config = session_config
+        self.add_grad_ops = add_grad_ops
 
         self.df_multiplier = df_multiplier
 
@@ -54,6 +57,9 @@ class PINN_Base:
                 self.U_hat_df = None
 
             self.loss = self._loss(self.U_hat, self.U_hat_df)
+
+            if self.add_grad_ops:
+                self._init_grad_ops()
 
             self._init_optimizers()
 
@@ -124,13 +130,13 @@ class PINN_Base:
             tf.square(self._residual_collocation(U_hat)))
 
         if self.use_differential_points:
-            loss_residual_differential = tf.reduce_mean(
+            self.loss_residual_differential = tf.reduce_mean(
                 tf.square(self._residual_differential(U_hat_df)))
 
             if self.use_collocation_residual:
-                return self.mse + self.loss_residual + self.df_multiplier * loss_residual_differential
+                return self.mse + self.loss_residual + self.df_multiplier * self.loss_residual_differential
             else:
-                return self.mse + self.df_multiplier * loss_residual_differential
+                return self.mse + self.df_multiplier * self.loss_residual_differential
         else:
             return self.mse + self.df_multiplier * self.loss_residual
 
@@ -183,6 +189,31 @@ class PINN_Base:
             biases.append(b)
 
         return weights, biases
+
+    def _init_grad_ops(self):
+        # Add ops to get the gradient outside of an optimizer
+        # Also add ops useful for computing the full hessian or a hessian approximation
+
+        all_params = self.get_all_weight_variables()
+        param_array = []
+        for param_list in all_params:
+            for layer in param_list:
+                param_array.append(layer)
+
+        # Can't concat yet since the flattened array is not part of the computation
+        # of the loss.
+        grads = tf.gradients(self.loss, param_array)
+        grads_flat = []
+        for grad in grads:
+            grads_flat.append(tf.reshape(grad, [-1]))
+
+        self.grads_flat = tf.concat(grads_flat, axis=0)
+
+        self.hessian_vector = tf.placeholder(
+            self.dtype, shape=self.grads_flat.shape)
+
+        prod = tf.reduce_sum(self.grads_flat * self.hessian_vector)
+        self.hessian_matvec = tf.gradients(prod, param_array)
 
     def get_input_dim(self):
         return self.layers[0]
@@ -338,3 +369,57 @@ class PINN_Base:
 
     def predict(self, X):
         return self.sess.run(self.U_hat, {self.X: X})
+
+    def get_hessian_OPG(self, X, U, X_df):
+
+        if self.use_differential_points:
+            feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
+        else:
+            feed_dict = {self.X: X, self.U: U}
+
+        grads = self.sess.run(self.grads_flat, feed_dict)
+        return np.outer(grads, grads)
+
+    def get_hessian_matvec(self, v, X, U, X_df):
+
+        if self.use_differential_points:
+            feed_dict = {self.hessian_vector: v,
+                         self.X: X, self.U: U, self.X_df: X_df}
+        else:
+            feed_dict = {
+                self.hessian_vector: v,
+                self.X: X, self.U: U}
+
+        h_row = self.sess.run(self.hessian_matvec, feed_dict)
+
+        # h_row is a list, we want to return a vector
+        return util.unwrap(h_row)
+
+    def get_hessian(self, X, U, X_df):
+        print(
+            "Warning, trying to calculate the full Hessian is infeasible for large networks!")
+
+        if self.use_differential_points:
+            feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
+        else:
+            feed_dict = {self.X: X, self.U: U}
+
+        # We use repeated runs to avoid adding gradient ops for every
+        # element of the hessian
+        n = int(self.grads_flat.shape[0])
+        H = np.empty((n, n))
+        progbar = Progbar(n)
+        for i in range(n):
+            vec = np.zeros(n, dtype=np.float32)
+            vec[i] = 1.0
+            feed_dict[self.hessian_vector] = vec
+            h_row = self.sess.run(self.hessian_matvec, feed_dict)
+            h_row = util.unwrap(h_row)
+            H[i, :] = h_row[:]
+            progbar.update(i + 1)
+
+        # Explicitly diagonalize so that e.g. eigenvalues are always real
+        for i in range(n):
+            for j in range(i + 1, n):
+                H[j, i] = H[i, j]
+        return H
