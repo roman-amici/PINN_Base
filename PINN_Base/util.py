@@ -109,7 +109,7 @@ def make_fetches_callback():
 
 
 def bfgs_callback(loss):
-    print(f"loss={loss}", end="\r")
+    print(f"loss={loss:.2E}", end="\r")
 
 
 def rmse(U_true, U_hat):
