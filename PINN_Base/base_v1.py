@@ -269,7 +269,7 @@ class PINN_Base:
         return tf.Variable(
             tf.zeros([1, width], dtype=self.dtype), dtype=self.dtype)
 
-    def _init_NN(self, layers: list[float]):
+    def _init_NN(self, layers: List[float]):
         '''
         Initialize the weights and biases for the MLP with given structure
 
