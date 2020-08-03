@@ -274,7 +274,7 @@ class PINN_Base:
         Initialize the weights and biases for the MLP with given structure
 
         Parameters:
-            layers (list[float]) : See the same param in __init__
+            layers (List[float]) : See the same param in __init__
         '''
 
         weights = []
@@ -364,8 +364,14 @@ class PINN_Base:
     def get_weights(self):
         return self.sess.run([self.weights, self.biases])
 
-    def get_loss(self, X):
-        return self.sess.run(self.loss, {self.X: X})
+    def get_loss(self, X, U, X_df):
+
+        if self.use_differential_points:
+            feed_dict = {self.X: X, self.U: U, self.X_df: X_df}
+        else:
+            feed_dict = {self.X: X, self.U: U}
+
+        return self.sess.run(self.loss, feed_dict)
 
     def get_loss_collocation(self, X):
         return self.sess.run(self.loss)
